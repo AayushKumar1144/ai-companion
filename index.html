@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Mental Health Companion</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            overflow: hidden; /* Hide scrollbars from body */
+        }
+        #bg-shapes {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: -1;
+        }
+        .shape {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            animation: float 20s infinite linear;
+        }
+        .shape1 { width: 200px; height: 200px; top: 10%; left: 15%; animation-duration: 25s; }
+        .shape2 { width: 150px; height: 150px; top: 60%; left: 70%; animation-duration: 30s; }
+        .shape3 { width: 100px; height: 100px; top: 30%; left: 80%; animation-duration: 15s; }
+        @keyframes float {
+            0% { transform: translateY(0) rotate(0deg); }
+            100% { transform: translateY(-120vh) rotate(360deg); }
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .spinner {
+            border-top-color: #3498db;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        /* Tab styles */
+        .tab-btn.active {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            background-color: rgba(255, 255, 255, 0.7);
+        }
+        .tab-btn {
+             border-radius: 8px 8px 0 0;
+        }
+        /* Glassmorphism effect */
+        #app {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        /* Breathing animation */
+        .breathing-circle {
+             /* This class is now mainly for targeting, animation is controlled by JS */
+            transition: transform 3s ease-in-out, background-color 3s ease-in-out;
+        }
+        /* Date filter button styles */
+        .filter-btn {
+            background-color: rgba(255, 255, 255, 0.5);
+            transition: background-color 0.2s;
+        }
+        .filter-btn.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col items-center justify-center p-4 text-gray-800">
+
+    <div id="bg-shapes">
+        <div class="shape shape1"></div>
+        <div class="shape shape2"></div>
+        <div class="shape shape3"></div>
+    </div>
+
+    <div id="app" class="w-full max-w-2xl mx-auto rounded-2xl shadow-xl p-6 md:p-8 flex flex-col h-full md:h-auto max-h-[95vh]">
+        
+        <header class="text-center border-b border-gray-200/80 pb-4 mb-4">
+            <h1 class="text-3xl font-bold text-gray-800">AI Mental Health Companion</h1>
+            <p class="text-gray-600 mt-1">A safe space to reflect and understand your feelings.</p>
+        </header>
+        
+        <div id="config-warning" class="hidden bg-red-100 border-l-4 border-red-500 text-red-800 p-4 rounded-lg mb-4">
+            <p class="font-bold">Configuration Needed!</p>
+            <p class="text-sm">Please paste your Firebase configuration object into the script to enable saving and dashboard features.</p>
+        </div>
+
+        <!-- Tab Buttons -->
+        <div class="mb-4 border-b border-gray-200/80">
+            <nav class="-mb-px flex space-x-2" aria-label="Tabs">
+                <button id="tab-journal" class="tab-btn active whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm text-gray-600 hover:text-blue-600 hover:bg-white/50">
+                    <i class="fas fa-book-open mr-2"></i>Journal
+                </button>
+                <button id="tab-dashboard" class="tab-btn whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm text-gray-600 hover:text-blue-600 hover:bg-white/50">
+                    <i class="fas fa-chart-line mr-2"></i>Dashboard
+                </button>
+                <button id="tab-resources" class="tab-btn whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm text-gray-600 hover:text-blue-600 hover:bg-white/50">
+                    <i class="fas fa-life-ring mr-2"></i>Resources
+                </button>
+                <button id="tab-export" class="tab-btn whitespace-nowrap py-3 px-4 border-b-2 font-medium text-sm text-gray-600 hover:text-blue-600 hover:bg-white/50">
+                    <i class="fas fa-download mr-2"></i>Export Data
+                </button>
+            </nav>
+        </div>
+
+        <main id="mainContent" class="flex-grow flex flex-col overflow-y-auto p-1">
+            <!-- Journal Tab Content -->
+            <div id="content-journal" class="tab-content">
+                <div id="disclaimer" class="bg-amber-100/80 border-l-4 border-amber-500 text-amber-900 p-4 rounded-lg mb-6 fade-in">
+                    <div class="flex">
+                        <div class="py-1"><i class="fas fa-exclamation-triangle fa-lg mr-3"></i></div>
+                        <div>
+                            <p class="font-bold">Important Disclaimer</p>
+                            <p class="text-sm">This is an AI companion, not a replacement for a therapist. In a crisis, please call a lifeline like <strong>988</strong>.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-6 fade-in">
+                    <label for="journalEntry" class="block text-lg font-semibold text-gray-700 mb-2">How are you feeling today?</label>
+                    <textarea id="journalEntry" rows="6" class="w-full p-4 text-gray-700 bg-white/80 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow duration-300" placeholder="Write down your thoughts and feelings here..."></textarea>
+                </div>
+                <div class="flex justify-center mb-6 fade-in">
+                    <button id="analyzeBtn" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-full hover:bg-blue-700 transition-transform transform hover:scale-105 shadow-lg focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:bg-gray-400 disabled:scale-100">
+                        <i class="fas fa-magic mr-2"></i>Analyze My Feelings
+                    </button>
+                </div>
+                <div id="analysisOutput" class="hidden fade-in">
+                     <h2 class="text-xl font-bold text-gray-800 mb-3 border-b pb-2">Analysis of Your Entry</h2>
+                    <div id="loadingSpinner" class="hidden flex items-center justify-center my-6">
+                        <div class="spinner w-12 h-12 rounded-full border-4 border-gray-200"></div>
+                        <p class="ml-4 text-gray-600">Analyzing your thoughts...</p>
+                    </div>
+                     <div id="error-message" class="hidden my-4 bg-red-100 text-red-700 p-3 rounded"></div>
+                    <div id="resultsContent" class="hidden">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div class="bg-blue-50/80 p-4 rounded-lg shadow-sm">
+                                <h3 class="font-semibold text-blue-800 mb-2"><i class="fas fa-shield-alt mr-2"></i>Safety Assessment</h3>
+                                <p><strong>Overall Sentiment:</strong> <span id="sentiment" class="font-medium"></span></p>
+                                <p><strong>Detected Risk Level:</strong> <span id="riskLevel" class="font-medium"></span></p>
+                            </div>
+                            <div class="bg-green-50/80 p-4 rounded-lg shadow-sm">
+                                <h3 class="font-semibold text-green-800 mb-2"><i class="fas fa-smile-beam mr-2"></i>Detected Emotions</h3>
+                                <ul id="emotionsList" class="list-disc list-inside text-gray-700"></ul>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div class="bg-indigo-50/80 p-4 rounded-lg shadow-sm">
+                                <h3 class="font-semibold text-indigo-800 mb-2"><i class="fas fa-search mr-2"></i>Key Insight</h3>
+                                <p id="keyInsight" class="text-gray-700"></p>
+                            </div>
+                            <div class="bg-purple-50/80 p-4 rounded-lg shadow-sm">
+                                <h3 class="font-semibold text-purple-800 mb-2"><i class="fas fa-brain mr-2"></i>Potential Thought Pattern</h3>
+                                <p id="thoughtPattern" class="text-gray-700"></p>
+                            </div>
+                             <div class="bg-gray-50/80 p-4 rounded-lg shadow-sm">
+                                <h3 class="font-semibold text-gray-800 mb-2"><i class="fas fa-lightbulb mr-2"></i>A Supportive Reflection</h3>
+                                <p id="supportiveMessage" class="text-gray-700 italic"></p>
+                            </div>
+                            <div class="bg-teal-50/80 p-4 rounded-lg shadow-sm">
+                                <h3 class="font-semibold text-teal-800 mb-2"><i class="fas fa-seedling mr-2"></i>Actionable Suggestion</h3>
+                                <p id="actionableSuggestion" class="text-gray-700"></p>
+                            </div>
+                        </div>
+                        
+                        <div id="crisisMessage" class="hidden mt-6 bg-red-100/90 border-l-4 border-red-500 text-red-800 p-4 rounded-lg">
+                             <p class="font-bold">It sounds like you are in significant distress.</p>
+                             <p class="text-sm">Please consider reaching out for help. You are not alone. Contact the National Suicide Prevention Lifeline at <strong>988</strong> or call 911.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Tab Content -->
+            <div id="content-dashboard" class="tab-content hidden">
+                 <div class="flex justify-center space-x-2 mb-4">
+                    <button data-range="all" class="filter-btn active px-3 py-1 text-sm font-medium rounded-md">All Time</button>
+                    <button data-range="month" class="filter-btn px-3 py-1 text-sm font-medium rounded-md">This Month</button>
+                    <button data-range="week" class="filter-btn px-3 py-1 text-sm font-medium rounded-md">This Week</button>
+                </div>
+                <div id="no-data-message" class="hidden text-center text-gray-500 my-8">
+                    <i class="fas fa-folder-open fa-3x mb-4"></i>
+                    <p>No journal entries found for the selected period.</p>
+                </div>
+                <!-- Chart Containers -->
+                <div id="sentimentChartContainer" class="bg-white/80 p-4 rounded-xl shadow-sm mb-6">
+                    <canvas id="sentimentChart"></canvas>
+                </div>
+                <div id="moodChartContainer" class="bg-white/80 p-4 rounded-xl shadow-sm">
+                    <canvas id="moodChart"></canvas>
+                    <div id="moodChartLegend" class="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-4 text-sm"></div>
+                </div>
+            </div>
+            
+            <!-- Resources Tab Content -->
+            <div id="content-resources" class="tab-content hidden">
+                 <h2 class="text-xl font-bold text-gray-800 mb-4">Tools & Information</h2>
+                 <div class="space-y-6">
+                    <!-- Interactive Breathing Exercise -->
+                    <div class="bg-white/80 p-4 rounded-lg shadow-sm">
+                        <h3 class="font-semibold text-purple-700 mb-3">Guided Breathing Exercise</h3>
+                        <div class="flex flex-col items-center">
+                            <div id="breathing-circle" class="w-32 h-32 bg-blue-400 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                                <span id="breathing-text">Start</span>
+                            </div>
+                            <button id="breathing-start-btn" class="mt-4 bg-purple-600 text-white font-bold py-2 px-6 rounded-full hover:bg-purple-700 transition-transform transform hover:scale-105 shadow-lg">Start Exercise</button>
+                        </div>
+                    </div>
+                    <!-- Static Links -->
+                    <a href="https://www.nami.org" target="_blank" class="block bg-white/80 p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                        <h3 class="font-semibold text-blue-700">National Alliance on Mental Illness (NAMI)</h3>
+                        <p class="text-sm text-gray-600">Find support, resources, and educational materials.</p>
+                    </a>
+                    <a href="https://www.crisistextline.org" target="_blank" class="block bg-white/80 p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                        <h3 class="font-semibold text-green-700">Crisis Text Line</h3>
+                        <p class="text-sm text-gray-600">Text HOME to 741741 from anywhere in the US, anytime, about any type of crisis.</p>
+                    </a>
+                 </div>
+            </div>
+
+            <!-- Export Data Tab -->
+            <div id="content-export" class="tab-content hidden">
+                 <h2 class="text-xl font-bold text-gray-800 mb-4">Export Your Data</h2>
+                 <p class="text-gray-600 mb-4">Download all of your journal entries and their AI analyses as a single JSON file. This is the first step to training your own custom model.</p>
+                 <div class="flex justify-center">
+                    <button id="export-btn" class="bg-green-600 text-white font-bold py-3 px-8 rounded-full hover:bg-green-700 transition-transform transform hover:scale-105 shadow-lg focus:outline-none focus:ring-4 focus:ring-green-300">
+                        <i class="fas fa-download mr-2"></i>Download My Data
+                    </button>
+                 </div>
+                 <p id="export-status" class="text-center text-sm text-gray-500 mt-4"></p>
+            </div>
+        </main>
+    </div>
+
+    <!-- This script tag is for the application logic -->
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- PASTE YOUR FIREBASE CONFIGURATION OBJECT HERE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDKkaK02KKCU-BXcSucOzqPes80gCqRC_A",
+            authDomain: "ai-mental-health-compani-a7510.firebaseapp.com",
+            projectId: "ai-mental-health-compani-a7510",
+            storageBucket: "ai-mental-health-compani-a7510.firebasestorage.app",
+            messagingSenderId: "395301755555",
+            appId: "1:395301755555:web:cd30cd6c908dd565407d16",
+            measurementId: "G-XZ1GM6BE0F"
+            };
+        // ----------------------------------------------------
+        
+        let firebaseInitialized = false;
+        let db, auth, currentUser = null, entriesUnsubscribe = null;
+        let allEntries = []; // Store all entries globally
+        let currentFilter = 'all'; // Default date filter
+
+        const configWarning = document.getElementById('config-warning');
+        const tabs = { journal: document.getElementById('tab-journal'), dashboard: document.getElementById('tab-dashboard'), resources: document.getElementById('tab-resources'), export: document.getElementById('tab-export') };
+        
+        if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY") {
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                firebaseInitialized = true;
+                
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUser = user;
+                        listenToEntries();
+                    } else {
+                        signInAnonymously(auth).catch((error) => {
+                            console.error("Anonymous sign-in failed:", error);
+                            showError("Could not connect to the database. Please refresh.");
+                        });
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                showError("Could not initialize Firebase. Check your configuration.");
+                firebaseInitialized = false;
+            }
+        } else {
+            console.warn("Firebase configuration is missing. App will run in offline mode.");
+            configWarning.classList.remove('hidden');
+            tabs.dashboard.style.display = 'none';
+            tabs.export.style.display = 'none';
+        }
+
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const journalEntry = document.getElementById('journalEntry');
+        const analysisOutput = document.getElementById('analysisOutput');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const resultsContent = document.getElementById('resultsContent');
+        const errorMessageEl = document.getElementById('error-message');
+        const sentimentEl = document.getElementById('sentiment');
+        const riskLevelEl = document.getElementById('riskLevel');
+        const emotionsListEl = document.getElementById('emotionsList');
+        const supportiveMessageEl = document.getElementById('supportiveMessage');
+        const crisisMessageEl = document.getElementById('crisisMessage');
+        const noDataMessage = document.getElementById('no-data-message');
+        const contents = { journal: document.getElementById('content-journal'), dashboard: document.getElementById('content-dashboard'), resources: document.getElementById('content-resources'), export: document.getElementById('content-export') };
+        
+        const keyInsightEl = document.getElementById('keyInsight');
+        const thoughtPatternEl = document.getElementById('thoughtPattern');
+        const actionableSuggestionEl = document.getElementById('actionableSuggestion');
+
+        let moodChart, sentimentChart;
+
+        const breathingStartBtn = document.getElementById('breathing-start-btn');
+        const exportBtn = document.getElementById('export-btn');
+        const filterBtns = document.querySelectorAll('.filter-btn');
+        
+        // Chart containers
+        const sentimentChartContainer = document.getElementById('sentimentChartContainer');
+        const moodChartContainer = document.getElementById('moodChartContainer');
+
+        analyzeBtn.addEventListener('click', handleAnalysis);
+        Object.keys(tabs).forEach(key => tabs[key].addEventListener('click', () => switchTab(key)));
+        breathingStartBtn.addEventListener('click', startBreathingExercise);
+        exportBtn.addEventListener('click', handleExport);
+        filterBtns.forEach(btn => btn.addEventListener('click', () => {
+            currentFilter = btn.dataset.range;
+            filterBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderCharts(); // Re-render with new filter
+        }));
+
+        function switchTab(tabKey) {
+            Object.keys(tabs).forEach(key => {
+                const isActive = key === tabKey;
+                tabs[key].classList.toggle('active', isActive);
+                contents[key].classList.toggle('hidden', !isActive);
+            });
+        }
+        
+        function listenToEntries() {
+            if (!firebaseInitialized || !currentUser) return;
+            if (entriesUnsubscribe) entriesUnsubscribe(); 
+
+            const entriesCol = collection(db, "users", currentUser.uid, "entries");
+            const q = query(entriesCol, orderBy("timestamp", "asc"));
+
+            entriesUnsubscribe = onSnapshot(q, (snapshot) => {
+                allEntries = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    const timestamp = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate() : new Date();
+                    return { id: doc.id, ...data, timestamp };
+                });
+                renderCharts();
+            }, (error) => {
+                console.error("Error listening to entries:", error);
+            });
+        }
+        
+        function getFilteredEntries() {
+            const now = new Date();
+            if (currentFilter === 'week') {
+                const lastWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+                return allEntries.filter(entry => entry.timestamp >= lastWeek);
+            }
+            if (currentFilter === 'month') {
+                const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+                return allEntries.filter(entry => entry.timestamp >= lastMonth);
+            }
+            return allEntries; // 'all'
+        }
+
+        // [FIXED] Centralized chart rendering logic
+        function renderCharts() {
+            const filteredEntries = getFilteredEntries();
+            const hasData = filteredEntries.length > 0;
+
+            noDataMessage.classList.toggle('hidden', hasData);
+            sentimentChartContainer.classList.toggle('hidden', !hasData);
+            moodChartContainer.classList.toggle('hidden', !hasData);
+
+            if (hasData) {
+                renderSentimentChart(filteredEntries);
+                renderMoodChart(filteredEntries);
+            } else {
+                if (sentimentChart) sentimentChart.destroy();
+                if (moodChart) moodChart.destroy();
+            }
+        }
+
+        function renderSentimentChart(entries) {
+            const ctx = document.getElementById('sentimentChart').getContext('2d');
+            if (sentimentChart) sentimentChart.destroy();
+
+            const sentimentMap = { 'Very Positive': 2, 'Positive': 1, 'Neutral': 0, 'Negative': -1, 'Very Negative': -2 };
+            const labels = entries.map(entry => entry.timestamp.toLocaleDateString());
+            const data = entries.map(entry => sentimentMap[entry.analysis.sentiment] || 0);
+
+            sentimentChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Sentiment Score',
+                        data,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        fill: true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { title: { display: true, text: 'Sentiment Score Over Time' } },
+                    scales: {
+                        y: {
+                            min: -2, max: 2,
+                            ticks: {
+                                callback: function(value) {
+                                    const labels = { '2': 'Very Positive', '1': 'Positive', '0': 'Neutral', '-1': 'Negative', '-2': 'Very Negative' };
+                                    return labels[value];
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderMoodChart(entries) {
+             const ctx = document.getElementById('moodChart').getContext('2d');
+             const legendContainer = document.getElementById('moodChartLegend');
+            if (moodChart) moodChart.destroy();
+            legendContainer.innerHTML = '';
+
+            const labels = entries.map(entry => entry.timestamp.toLocaleDateString());
+            const allEmotions = new Set();
+            entries.forEach(entry => {
+                if (entry.analysis && Array.isArray(entry.analysis.emotions)) {
+                    entry.analysis.emotions.forEach(emo => allEmotions.add(emo));
+                }
+            });
+            const trackedEmotions = Array.from(allEmotions);
+
+            const emotionData = {};
+            trackedEmotions.forEach(emo => {
+                emotionData[emo] = new Array(entries.length).fill(null); // Use null for missing data points
+            });
+
+            entries.forEach((entry, index) => {
+                if (entry.analysis && Array.isArray(entry.analysis.emotions)) {
+                    const entryEmotions = new Set(entry.analysis.emotions);
+                    trackedEmotions.forEach(trackedEmo => {
+                        if (entryEmotions.has(trackedEmo)) {
+                            emotionData[trackedEmo][index] = 5;
+                        }
+                    });
+                }
+            });
+            
+            const colorCache = {};
+            const generateColor = (str) => {
+                if (colorCache[str]) return colorCache[str];
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) {
+                    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+                }
+                let color = '#';
+                for (let i = 0; i < 3; i++) {
+                    let value = (hash >> (i * 8)) & 0xFF;
+                    color += ('00' + value.toString(16)).substr(-2);
+                }
+                colorCache[str] = color;
+                return color;
+            };
+
+            const datasets = trackedEmotions.map(emotion => {
+                const color = generateColor(emotion);
+                return {
+                    label: emotion, data: emotionData[emotion], borderColor: color,
+                    backgroundColor: `${color}33`, fill: true, tension: 0.4, spanGaps: true
+                };
+            });
+
+            moodChart = new Chart(ctx, {
+                type: 'line', data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    plugins: { 
+                        legend: { display: false }, 
+                        title: { display: true, text: 'Emotion Presence Over Time' } 
+                    },
+                    scales: { y: { beginAtZero: true, max: 10, title: { display: true, text: 'Emotion Presence' } } }
+                }
+            });
+            
+            trackedEmotions.forEach((emotion, index) => {
+                const color = datasets[index].borderColor;
+                const legendItem = document.createElement('div');
+                legendItem.classList.add('flex', 'items-center', 'cursor-pointer');
+                legendItem.onclick = () => {
+                    moodChart.setDatasetVisibility(index, !moodChart.isDatasetVisible(index));
+                    legendItem.style.textDecoration = moodChart.isDatasetVisible(index) ? 'none' : 'line-through';
+                    moodChart.update();
+                };
+                legendItem.innerHTML = `
+                    <div class="w-4 h-4 rounded-full mr-2" style="background-color: ${color}"></div>
+                    <span>${emotion}</span>
+                `;
+                legendContainer.appendChild(legendItem);
+            });
+        }
+        
+        async function handleAnalysis() {
+            if (firebaseInitialized && !currentUser) {
+                showError("Authenticating... Please wait a moment and try again.");
+                return;
+            }
+            const entryText = journalEntry.value;
+            if (entryText.trim().length < 10) {
+                 showError("Please write a bit more for an accurate analysis.");
+                return;
+            }
+            
+            setLoadingState(true);
+            
+            try {
+                let analysis;
+                const maxRetries = 3;
+                for (let i = 0; i < maxRetries; i++) {
+                    try {
+                        analysis = await analyzeWithGemini(entryText);
+                        break; 
+                    } catch (error) {
+                        if (error.message.includes('503') && i < maxRetries - 1) {
+                            console.warn(`Attempt ${i + 1} failed with 503. Retrying in 2 seconds...`);
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                        } else {
+                            throw error;
+                        }
+                    }
+                }
+                
+                displayAnalysis(analysis);
+                if (firebaseInitialized) {
+                    await saveEntry(entryText, analysis);
+                }
+                journalEntry.value = '';
+            } catch (error) {
+                console.error("Full Error:", error);
+                showError("Sorry, something went wrong while analyzing. Please try again.");
+            } finally {
+                setLoadingState(false);
+            }
+        }
+
+        async function saveEntry(text, analysis) {
+            try {
+                const entriesCol = collection(db, "users", currentUser.uid, "entries");
+                await addDoc(entriesCol, {
+                    text: text, analysis: analysis, timestamp: new Date()
+                });
+                console.log("Entry saved successfully!");
+            } catch (error) {
+                console.error("Error saving entry: ", error);
+                showError("Could not save your entry to the database.");
+            }
+        }
+
+        async function analyzeWithGemini(text) {
+            const apiKey = "AIzaSyD3Z-FWlMy9OFASopVkwd_NsS7EQzf2BHo"; // Paste your Gemini API key
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            const systemPrompt = `You are an expert mental health analyst AI. Your task is to analyze a user's journal entry with empathy and safety as top priorities.
+            Analyze the following text and respond ONLY with a valid JSON object. Do not include any other text or markdown formatting.
+            The JSON object must conform to this schema:
+            {
+              "sentiment": "string (one of: 'Very Positive', 'Positive', 'Neutral', 'Negative', 'Very Negative')",
+              "riskLevel": "string ('Low', 'Medium', 'High/Critical')",
+              "emotions": "array of strings (3-5 most prominent emotions, e.g., ['Sadness', 'Anxiety', 'Gratitude'])",
+              "keyInsight": "string (A one-sentence summary of the core feeling or conflict in the entry.)",
+              "thoughtPattern": "string (Identify a potential cognitive pattern like 'Rumination', 'Future-Worry', 'Self-Criticism', or 'None Identified'.)",
+              "supportiveMessage": "string (A longer, more empathetic reflection of 2-3 sentences. Acknowledge their feelings and validate their experience without giving direct advice.)",
+              "actionableSuggestion": "string (A gentle, safe, non-clinical suggestion for a small action. e.g., 'Consider taking a few deep breaths.' or 'Maybe a short walk could offer a fresh perspective.')",
+              "isCrisis": "boolean (true ONLY if there is mention of self-harm, suicide, or immediate danger)"
+            }`;
+
+            const payload = {
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                contents: [{ parts: [{ text }] }],
+                generationConfig: { responseMimeType: "application/json", temperature: 0.7 } 
+            };
+            
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.text();
+                throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
+            }
+
+            const result = await response.json();
+            const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+            
+            if (!jsonText) throw new Error("Invalid response structure from API.");
+            
+            return JSON.parse(jsonText);
+        }
+
+        function displayAnalysis(analysis) {
+            resultsContent.classList.remove('hidden');
+            errorMessageEl.classList.add('hidden');
+            
+            sentimentEl.textContent = analysis.sentiment;
+            riskLevelEl.textContent = analysis.riskLevel;
+
+            const risk = analysis.riskLevel.toLowerCase();
+            if (risk.includes('high') || risk.includes('critical')) {
+                riskLevelEl.className = 'font-bold text-red-600';
+            } else if (risk.includes('medium')) {
+                riskLevelEl.className = 'font-bold text-amber-600';
+            } else {
+                riskLevelEl.className = 'font-bold text-green-600';
+            }
+
+            emotionsListEl.innerHTML = '';
+            analysis.emotions.forEach(emotion => {
+                const li = document.createElement('li');
+                li.textContent = emotion;
+                emotionsListEl.appendChild(li);
+            });
+
+            keyInsightEl.textContent = analysis.keyInsight;
+            thoughtPatternEl.textContent = analysis.thoughtPattern;
+            supportiveMessageEl.textContent = analysis.supportiveMessage;
+            actionableSuggestionEl.textContent = analysis.actionableSuggestion;
+
+            crisisMessageEl.classList.toggle('hidden', !analysis.isCrisis);
+            analysisOutput.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        function startBreathingExercise() {
+            const circle = document.getElementById('breathing-circle');
+            const text = document.getElementById('breathing-text');
+            const btn = document.getElementById('breathing-start-btn');
+            
+            if (btn.dataset.running === 'true') {
+                btn.dataset.running = 'false';
+                btn.textContent = 'Start Exercise';
+                text.textContent = 'Start';
+                circle.style.animation = 'none';
+                return;
+            }
+
+            btn.dataset.running = 'true';
+            btn.textContent = 'Stop Exercise';
+
+            const sequence = [
+                { text: "Inhale...", duration: 4000 },
+                { text: "Hold", duration: 7000 },
+                { text: "Exhale...", duration: 8000 }
+            ];
+            
+            let sequenceIndex = 0;
+            
+            function runBreathingAnimation() {
+                 if (btn.dataset.running === 'false') return;
+
+                 text.textContent = sequence[sequenceIndex].text;
+                 
+                 if(sequenceIndex === 0) { // Inhale
+                     circle.style.transform = 'scale(1.2)';
+                     circle.style.backgroundColor = '#93c5fd';
+                 } else if (sequenceIndex === 2) { // Exhale
+                     circle.style.transform = 'scale(0.8)';
+                     circle.style.backgroundColor = '#60a5fa';
+                 }
+                 
+                 setTimeout(() => {
+                    sequenceIndex = (sequenceIndex + 1) % sequence.length;
+                    runBreathingAnimation();
+                }, sequence[sequenceIndex].duration);
+            }
+            
+            runBreathingAnimation();
+        }
+
+        async function handleExport() {
+            if (!firebaseInitialized || !currentUser) {
+                alert("Please connect to Firebase to export data.");
+                return;
+            }
+            const statusEl = document.getElementById('export-status');
+            statusEl.textContent = 'Exporting... please wait.';
+            
+            try {
+                const entriesCol = collection(db, "users", currentUser.uid, "entries");
+                const q = query(entriesCol, orderBy("timestamp", "asc"));
+                const snapshot = await getDocs(q);
+                const entries = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        text: data.text,
+                        analysis: data.analysis,
+                        timestamp: data.timestamp.toDate().toISOString()
+                    };
+                });
+
+                const jsonString = JSON.stringify(entries, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'mental_health_data.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                statusEl.textContent = `Successfully exported ${entries.length} entries.`;
+
+            } catch(error) {
+                console.error("Export failed:", error);
+                statusEl.textContent = 'Export failed. See console for details.';
+            }
+        }
+
+        function setLoadingState(isLoading) {
+            if (isLoading) {
+                analyzeBtn.disabled = true;
+                analyzeBtn.innerHTML = `<div class="spinner w-5 h-5 border-2 border-white inline-block mr-2"></div>Analyzing...`;
+                analysisOutput.classList.remove('hidden');
+                resultsContent.classList.add('hidden');
+                loadingSpinner.classList.remove('hidden');
+                errorMessageEl.classList.add('hidden');
+            } else {
+                analyzeBtn.disabled = false;
+                analyzeBtn.innerHTML = `<i class="fas fa-magic mr-2"></i>Analyze My Feelings`;
+                loadingSpinner.classList.add('hidden');
+            }
+        }
+        
+        function showError(message) {
+            resultsContent.classList.add('hidden');
+            errorMessageEl.textContent = message;
+            errorMessageEl.classList.remove('hidden');
+        }
+
+        switchTab('journal');
+
+        const bgShapes = document.getElementById('bg-shapes');
+        window.addEventListener('mousemove', (e) => {
+            const { clientX, clientY } = e;
+            const x = clientX / window.innerWidth;
+            const y = clientY / window.innerHeight;
+            bgShapes.style.transform = `translate(-${x * 20}px, -${y * 20}px)`;
+        });
+    </script>
+</body>
+</html>
