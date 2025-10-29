@@ -16,23 +16,30 @@ pipeline {
             }
         }
 
-        stage('Inject Secrets') { // 2. Replace placeholders with real secrets
+        stage('Inject Secrets') {
             steps {
                 script {
                     echo 'Injecting Firebase and Gemini API Keys...'
-                    // Read the template index.html
-                    def htmlContent = readFile 'index.html'
 
-                    // Replace placeholders with the actual values from Jenkins credentials
-                    htmlContent = htmlContent.replace('__FIREBASE_CONFIG_PLACEHOLDER__', env.FIREBASE_CONFIG_JSON)
-                    htmlContent = htmlContent.replace('__GEMINI_KEY_PLACEHOLDER__', env.GEMINI_API_KEY)
+                    withCredentials([
+                        string(credentialsId: 'firebase-config-json', variable: 'FIREBASE_CONFIG_JSON'),
+                        string(credentialsId: 'gemini-api-key', variable: 'GEMINI_API_KEY')
+                    ]) {
+                        // Read index.html
+                        def htmlContent = readFile 'index.html'
 
-                    // Write the modified content back to index.html (this is the file Docker will use)
-                    writeFile file: 'index.html', text: htmlContent
-                    echo 'Secrets injected successfully.'
+                        // Replace placeholders with actual secrets
+                        htmlContent = htmlContent
+                            .replace('__FIREBASE_CONFIG_PLACEHOLDER__', FIREBASE_CONFIG_JSON)
+                            .replace('__GEMINI_KEY_PLACEHOLDER__', GEMINI_API_KEY)
+
+                        // Write back
+                        writeFile file: 'index.html', text: htmlContent
+                        echo 'Secrets injected successfully.'
+                    }
                 }
             }
-        }
+}
 
         stage('Build Docker Image') { // 3. Build the Nginx container image
             steps {
