@@ -1,19 +1,13 @@
-// Define environment variables
-environment {
-    FIREBASE_CONFIG_JSON = credentials('firebase-config-json')
-    GEMINI_API_KEY = credentials('gemini-api-key')
-    // We'll use the build number to make image tags unique
-
-    // Define our 'current' and 'next' apps
-    // We'll figure out the real values in the first stage
-    CURRENT_APP = ""
-    NEXT_APP = ""
-    CURRENT_COLOR = ""
-    NEXT_COLOR = ""
-}
-
 pipeline {
     agent any
+
+    // This environment block is now ONLY for our deployment logic
+    environment {
+        CURRENT_APP = ""
+        NEXT_APP = ""
+        CURRENT_COLOR = ""
+        NEXT_COLOR = ""
+    }
 
     stages {
         stage('Checkout') {
@@ -22,15 +16,26 @@ pipeline {
             }
         }
 
+        // THIS STAGE IS RE-WRITTEN TO FIX THE ERROR
         stage('Inject Secrets') {
             steps {
-                script {
-                    echo 'Injecting Firebase and Gemini API Keys...'
-                    def htmlContent = readFile 'index.html'
-                    htmlContent = htmlContent.replace('__FIREBASE_CONFIG_PLACEHOLDER__', env.FIREBASE_CONFIG_JSON)
-                    htmlContent = htmlContent.replace('__GEMINI_KEY_PLACEHOLDER__', env.GEMINI_API_KEY)
-                    writeFile file: 'index.html', text: htmlContent
-                    echo 'Secrets injected successfully.'
+                // We load the secrets directly into variables here
+                // This is a more robust method
+                withCredentials([
+                    string(credentialsId: 'firebase-config-json', variable: 'FIREBASE_SECRET_DATA'),
+                    string(credentialsId: 'gemini-api-key', variable: 'GEMINI_SECRET_DATA')
+                ]) {
+                    // Now we use the new variables
+                    script {
+                        echo 'Injecting Firebase and Gemini API Keys...'
+                        def htmlContent = readFile 'index.html'
+
+                        htmlContent = htmlContent.replace('__FIREBASE_CONFIG_PLACEHOLDER__', FIREBASE_SECRET_DATA)
+                        htmlContent = htmlContent.replace('__GEMINI_KEY_PLACEHOLDER__', GEMINI_SECRET_DATA)
+
+                        writeFile file: 'index.html', text: htmlContent
+                        echo 'Secrets injected successfully.'
+                    }
                 }
             }
         }
@@ -38,21 +43,16 @@ pipeline {
         stage('Determine Blue/Green State') {
             steps {
                 script {
-                    // Check which container is currently running by inspecting the proxy's config file
-                    // We run this inside a docker container that has access to the host's docker socket
-                    // This is a bit advanced, but it's the most reliable way in this setup
                     echo "Checking which version is currently live..."
                     def result = sh(script: "docker exec nginx-proxy cat /etc/nginx/nginx.conf | grep 'server blue:80'", returnStatus: true)
 
                     if (result == 0) {
-                        // 'grep' found the line, so BLUE is LIVE
                         echo "LIVE version is BLUE. Deploying GREEN."
                         env.CURRENT_APP = "ai-companion-blue"
                         env.CURRENT_COLOR = "blue"
                         env.NEXT_APP = "ai-companion-green"
                         env.NEXT_COLOR = "green"
                     } else {
-                        // 'grep' failed, so GREEN must be LIVE
                         echo "LIVE version is GREEN. Deploying BLUE."
                         env.CURRENT_APP = "ai-companion-green"
                         env.CURRENT_COLOR = "green"
@@ -67,12 +67,9 @@ pipeline {
             steps {
                 script {
                     echo "Building new image for ${env.NEXT_COLOR}..."
-                    // Build the new image, passing in the color
                     sh "docker-compose build --build-arg VERSION_COLOR=${env.NEXT_COLOR} ${env.NEXT_APP}"
 
                     echo "Deploying new ${env.NEXT_COLOR} container..."
-                    // Start the new "inactive" container. docker-compose will create it.
-                    // We also start the proxy if it's not running
                     sh "docker-compose up -d --no-deps ${env.NEXT_APP} nginx-proxy"
                 }
             }
@@ -82,12 +79,7 @@ pipeline {
             steps {
                 script {
                     echo "Switching live traffic to ${env.NEXT_COLOR}..."
-                    // This is the magic:
-                    // 1. Edit the nginx.conf file on the server
-                    // 2. 'sed' finds the old color and replaces it with the new color
                     sh "sed -i 's/server ${env.CURRENT_COLOR}:80/server ${env.NEXT_COLOR}:80/' nginx.conf"
-
-                    // 2. Tell the nginx-proxy container to reload its configuration
                     sh "docker exec nginx-proxy nginx -s reload"
                     echo "Traffic switched. ${env.NEXT_COLOR} is now LIVE."
                 }
