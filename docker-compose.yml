@@ -7,7 +7,7 @@ services:
     container_name: nginx-proxy
     volumes:
       # This config file will tell Nginx where to send traffic
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./blue-green.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       # This is the ONLY port exposed to the world
       - "80:80"
@@ -42,4 +42,4 @@ services:
 
 networks:
   ai-companion-net:
-    driver: bridge
+    driver: bridge3

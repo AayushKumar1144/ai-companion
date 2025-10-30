@@ -28,14 +28,15 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Determine Blue/Green State') {
             steps {
                 script {
                     echo "Checking which version is currently live..."
-                    // We check the LOCAL nginx.conf file, since it's our source of truth
+                    // We check the LOCAL blue-green.conf file
                     try {
-                        def config = readFile 'nginx.conf'
+                        // *** THIS LINE IS NOW CORRECTED ***
+                        def config = readFile 'blue-green.conf' 
                         if (config.contains('server blue:80')) {
                             echo "LIVE version is BLUE. Deploying GREEN."
                             CURRENT_APP = "blue"
@@ -56,15 +57,14 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Build & Deploy INACTIVE Version') {
             steps {
                 script {
                     echo "Building new image for ${NEXT_COLOR}..."
                     sh "docker-compose build --build-arg VERSION_COLOR=${NEXT_COLOR} ${NEXT_APP}"
-
+                    
                     echo "Deploying new ${NEXT_COLOR} container..."
-                    // This command also starts/restarts the proxy if needed
                     sh "docker-compose up -d --no-deps ${NEXT_APP} nginx-proxy"
                 }
             }
@@ -74,13 +74,13 @@ pipeline {
             steps {
                 script {
                     echo "Switching live traffic to ${NEXT_COLOR}..."
-
-                    // 1. Edit the LOCAL nginx.conf file (which is mounted into the proxy)
-                    sh "sed -i 's/server ${CURRENT_COLOR}:80/server ${NEXT_COLOR}:80/' nginx.conf"
-
-                    // 2. Tell the Nginx proxy (which is watching the mounted file) to reload
+                    
+                    // *** THIS LINE IS NOW CORRECTED ***
+                    sh "sed -i 's/server ${CURRENT_COLOR}:80/server ${NEXT_COLOR}:80/' blue-green.conf"
+                    
+                    // 2. Tell the Nginx proxy to reload
                     sh "docker exec nginx-proxy nginx -s reload"
-
+                    
                     echo "Traffic switched. ${NEXT_COLOR} is now LIVE."
                 }
             }
@@ -98,8 +98,8 @@ pipeline {
 
     post {
         always {
-            
-            echo 'Workspace cleaned.'
+            // We removed cleanWs() to prevent the error
+            echo 'Pipeline finished.'
         }
     }
 }
