@@ -1,13 +1,8 @@
+// Define our variables at the top level
+def CURRENT_APP, NEXT_APP, CURRENT_COLOR, NEXT_COLOR
+
 pipeline {
     agent any
-
-    // This environment block is now ONLY for our deployment logic
-    environment {
-        CURRENT_APP = ""
-        NEXT_APP = ""
-        CURRENT_COLOR = ""
-        NEXT_COLOR = ""
-    }
 
     stages {
         stage('Checkout') {
@@ -16,23 +11,17 @@ pipeline {
             }
         }
 
-        // THIS STAGE IS RE-WRITTEN TO FIX THE ERROR
         stage('Inject Secrets') {
             steps {
-                // We load the secrets directly into variables here
-                // This is a more robust method
                 withCredentials([
                     string(credentialsId: 'firebase-config-json', variable: 'FIREBASE_SECRET_DATA'),
                     string(credentialsId: 'gemini-api-key', variable: 'GEMINI_SECRET_DATA')
                 ]) {
-                    // Now we use the new variables
                     script {
                         echo 'Injecting Firebase and Gemini API Keys...'
                         def htmlContent = readFile 'index.html'
-
                         htmlContent = htmlContent.replace('__FIREBASE_CONFIG_PLACEHOLDER__', FIREBASE_SECRET_DATA)
                         htmlContent = htmlContent.replace('__GEMINI_KEY_PLACEHOLDER__', GEMINI_SECRET_DATA)
-
                         writeFile file: 'index.html', text: htmlContent
                         echo 'Secrets injected successfully.'
                     }
@@ -44,20 +33,25 @@ pipeline {
             steps {
                 script {
                     echo "Checking which version is currently live..."
-                    def result = sh(script: "docker exec nginx-proxy cat /etc/nginx/nginx.conf | grep 'server blue:80'", returnStatus: true)
-
-                    if (result == 0) {
-                        echo "LIVE version is BLUE. Deploying GREEN."
-                        env.CURRENT_APP = "ai-companion-blue"
-                        env.CURRENT_COLOR = "blue"
-                        env.NEXT_APP = "ai-companion-green"
-                        env.NEXT_COLOR = "green"
-                    } else {
-                        echo "LIVE version is GREEN. Deploying BLUE."
-                        env.CURRENT_APP = "ai-companion-green"
-                        env.CURRENT_COLOR = "green"
-                        env.NEXT_APP = "ai-companion-blue"
-                        env.NEXT_COLOR = "blue"
+                    // We must wrap this in a try/catch, because on the first run, the container won't exist
+                    try {
+                        def result = sh(script: "docker exec nginx-proxy cat /etc/nginx/nginx.conf | grep 'server blue:80'", returnStatus: true)
+                        if (result == 0) {
+                            echo "LIVE version is BLUE. Deploying GREEN."
+                            CURRENT_APP = "blue" // Using the service name from docker-compose
+                            CURRENT_COLOR = "blue"
+                            NEXT_APP = "green"
+                            NEXT_COLOR = "green"
+                        } else {
+                            throw new Exception("Result was not 0")
+                        }
+                    } catch (Exception e) {
+                        // If any error happens (like 'container not found'), we deploy BLUE
+                        echo "LIVE version is GREEN (or proxy not found). Deploying BLUE."
+                        CURRENT_APP = "green"
+                        CURRENT_COLOR = "green"
+                        NEXT_APP = "blue"
+                        NEXT_COLOR = "blue"
                     }
                 }
             }
@@ -66,11 +60,12 @@ pipeline {
         stage('Build & Deploy INACTIVE Version') {
             steps {
                 script {
-                    echo "Building new image for ${env.NEXT_COLOR}..."
-                    sh "docker-compose build --build-arg VERSION_COLOR=${env.NEXT_COLOR} ${env.NEXT_APP}"
+                    echo "Building new image for ${NEXT_COLOR}..."
+                    // We use the variables directly (no 'env.' prefix)
+                    sh "docker-compose build --build-arg VERSION_COLOR=${NEXT_COLOR} ${NEXT_APP}"
 
-                    echo "Deploying new ${env.NEXT_COLOR} container..."
-                    sh "docker-compose up -d --no-deps ${env.NEXT_APP} nginx-proxy"
+                    echo "Deploying new ${NEXT_COLOR} container..."
+                    sh "docker-compose up -d --no-deps ${NEXT_APP} nginx-proxy"
                 }
             }
         }
@@ -78,10 +73,22 @@ pipeline {
         stage('Switch Traffic to INACTIVE') {
             steps {
                 script {
-                    echo "Switching live traffic to ${env.NEXT_COLOR}..."
-                    sh "sed -i 's/server ${env.CURRENT_COLOR}:80/server ${env.NEXT_COLOR}:80/' nginx.conf"
+                    echo "Switching live traffic to ${NEXT_COLOR}..."
+                    // This step will fail on the first run because nginx.conf isn't on the host
+                    // We need to copy it from the container first, edit it, then copy it back
+
+                    // 1. Copy config from proxy to Jenkins workspace
+                    sh "docker cp nginx-proxy:/etc/nginx/nginx.conf ."
+
+                    // 2. Edit the config in the workspace
+                    sh "sed -i 's/server ${CURRENT_COLOR}:80/server ${NEXT_COLOR}:80/' nginx.conf"
+
+                    // 3. Copy the modified config back into the proxy
+                    sh "docker cp ./nginx.conf nginx-proxy:/etc/nginx/nginx.conf"
+
+                    // 4. Tell Nginx to reload
                     sh "docker exec nginx-proxy nginx -s reload"
-                    echo "Traffic switched. ${env.NEXT_COLOR} is now LIVE."
+                    echo "Traffic switched. ${NEXT_COLOR} is now LIVE."
                 }
             }
         }
@@ -89,8 +96,9 @@ pipeline {
         stage('Stop OLD Version') {
             steps {
                 script {
-                    echo "Stopping old ${env.CURRENT_COLOR} container..."
-                    sh "docker stop ${env.CURRENT_APP}"
+                    echo "Stopping old ${CURRENT_COLOR} container..."
+                    // We stop the service defined in docker-compose
+                    sh "docker-compose stop ${CURRENT_APP}"
                 }
             }
         }
