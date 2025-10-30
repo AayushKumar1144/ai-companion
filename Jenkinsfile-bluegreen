@@ -3,7 +3,7 @@ environment {
     FIREBASE_CONFIG_JSON = credentials('firebase-config-json')
     GEMINI_API_KEY = credentials('gemini-api-key')
     // We'll use the build number to make image tags unique
-    IMAGE_TAG = "v${env.BUILD_NUMBER}"
+
     // Define our 'current' and 'next' apps
     // We'll figure out the real values in the first stage
     CURRENT_APP = ""
