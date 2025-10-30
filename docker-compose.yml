@@ -42,4 +42,4 @@ services:
 
 networks:
   ai-companion-net:
-    driver: bridge3
+     
