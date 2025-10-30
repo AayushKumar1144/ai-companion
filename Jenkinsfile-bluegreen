@@ -33,20 +33,20 @@ pipeline {
             steps {
                 script {
                     echo "Checking which version is currently live..."
-                    // We must wrap this in a try/catch, because on the first run, the container won't exist
+                    // We check the LOCAL nginx.conf file, since it's our source of truth
                     try {
-                        def result = sh(script: "docker exec nginx-proxy cat /etc/nginx/nginx.conf | grep 'server blue:80'", returnStatus: true)
-                        if (result == 0) {
+                        def config = readFile 'nginx.conf'
+                        if (config.contains('server blue:80')) {
                             echo "LIVE version is BLUE. Deploying GREEN."
-                            CURRENT_APP = "blue" // Using the service name from docker-compose
+                            CURRENT_APP = "blue"
                             CURRENT_COLOR = "blue"
                             NEXT_APP = "green"
                             NEXT_COLOR = "green"
                         } else {
-                            throw new Exception("Result was not 0")
+                            throw new Exception("Config is not blue")
                         }
                     } catch (Exception e) {
-                        // If any error happens (like 'container not found'), we deploy BLUE
+                        // If file not found or config is not blue, we deploy BLUE
                         echo "LIVE version is GREEN (or proxy not found). Deploying BLUE."
                         CURRENT_APP = "green"
                         CURRENT_COLOR = "green"
@@ -61,10 +61,10 @@ pipeline {
             steps {
                 script {
                     echo "Building new image for ${NEXT_COLOR}..."
-                    // We use the variables directly (no 'env.' prefix)
                     sh "docker-compose build --build-arg VERSION_COLOR=${NEXT_COLOR} ${NEXT_APP}"
 
                     echo "Deploying new ${NEXT_COLOR} container..."
+                    // This command also starts/restarts the proxy if needed
                     sh "docker-compose up -d --no-deps ${NEXT_APP} nginx-proxy"
                 }
             }
@@ -74,20 +74,13 @@ pipeline {
             steps {
                 script {
                     echo "Switching live traffic to ${NEXT_COLOR}..."
-                    // This step will fail on the first run because nginx.conf isn't on the host
-                    // We need to copy it from the container first, edit it, then copy it back
 
-                    // 1. Copy config from proxy to Jenkins workspace
-                    sh "docker cp nginx-proxy:/etc/nginx/nginx.conf ."
-
-                    // 2. Edit the config in the workspace
+                    // 1. Edit the LOCAL nginx.conf file (which is mounted into the proxy)
                     sh "sed -i 's/server ${CURRENT_COLOR}:80/server ${NEXT_COLOR}:80/' nginx.conf"
 
-                    // 3. Copy the modified config back into the proxy
-                    sh "docker cp ./nginx.conf nginx-proxy:/etc/nginx/nginx.conf"
-
-                    // 4. Tell Nginx to reload
+                    // 2. Tell the Nginx proxy (which is watching the mounted file) to reload
                     sh "docker exec nginx-proxy nginx -s reload"
+
                     echo "Traffic switched. ${NEXT_COLOR} is now LIVE."
                 }
             }
@@ -97,7 +90,6 @@ pipeline {
             steps {
                 script {
                     echo "Stopping old ${CURRENT_COLOR} container..."
-                    // We stop the service defined in docker-compose
                     sh "docker-compose stop ${CURRENT_APP}"
                 }
             }
