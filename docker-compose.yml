@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # The main router that directs traffic
+  nginx-proxy:
+    image: nginx:stable-alpine
+    container_name: nginx-proxy
+    volumes:
+      # This config file will tell Nginx where to send traffic
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      # This is the ONLY port exposed to the world
+      - "80:80"
+    networks:
+      - ai-companion-net
+
+  # The "LIVE" version of your app
+  blue:
+    build:
+      context: .
+      args:
+        VERSION_COLOR: blue
+    image: ai-companion-blue
+    container_name: ai-companion-blue
+    networks:
+      - ai-companion-net
+    expose:
+      - "80" # Exposed only to the proxy, not the world
+
+  # The "INACTIVE" version of your app
+  green:
+    build:
+      context: .
+      args:
+        VERSION_COLOR: green
+    image: ai-companion-green
+    container_name: ai-companion-green
+    networks:
+      - ai-companion-net
+    expose:
+      - "80" # Exposed only to the proxy, not the world
+
+networks:
+  ai-companion-net:
+    driver: bridge
